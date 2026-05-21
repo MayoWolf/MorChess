@@ -12,6 +12,7 @@ import {
   Target,
   Timer,
   Trophy,
+  Users,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -21,6 +22,9 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
+  Legend,
+  Line,
+  LineChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -56,7 +60,26 @@ const ranges: Array<{ key: RangeKey; label: string }> = [
   { key: "year", label: "Year" },
 ];
 
-type ViewKey = "profile" | "analytics" | "games" | "settings";
+type ViewKey = "profile" | "analytics" | "games" | "compare" | "settings";
+type ResultFilter = "all" | ChessGame["result"];
+type CompareSlot = "left" | "right";
+type ComparePlayer = {
+  error: string | null;
+  games: ChessGame[];
+  isLoading: boolean;
+  status: string;
+  summary: ParseSummary | null;
+  username: string;
+};
+
+const emptyComparePlayer: ComparePlayer = {
+  error: null,
+  games: [],
+  isLoading: false,
+  status: "Ready",
+  summary: null,
+  username: "",
+};
 
 export function App() {
   const [username, setUsername] = useState("");
@@ -72,6 +95,10 @@ export function App() {
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [selectedHeatDate, setSelectedHeatDate] = useState<string | null>(null);
+  const [comparePlayers, setComparePlayers] = useState<Record<CompareSlot, ComparePlayer>>({
+    left: { ...emptyComparePlayer },
+    right: { ...emptyComparePlayer },
+  });
 
   const availableSheets = useMemo(() => availableTimeSheets(games), [games]);
   const sheetGames = useMemo(() => filterByTimeSheet(games, timeSheet), [games, timeSheet]);
@@ -150,6 +177,46 @@ export function App() {
     });
   }
 
+  function updateComparePlayer(slot: CompareSlot, patch: Partial<ComparePlayer>) {
+    setComparePlayers((current) => ({
+      ...current,
+      [slot]: { ...current[slot], ...patch },
+    }));
+  }
+
+  async function loadComparePlayer(slot: CompareSlot) {
+    const requestedUsername = comparePlayers[slot].username;
+    updateComparePlayer(slot, { error: null, isLoading: true, status: "Contacting Chess.com" });
+
+    try {
+      const result = await fetchChessComPgn(requestedUsername, {
+        delayMs: 120,
+        onProgress: (next) => updateComparePlayer(slot, { status: next.label }),
+      });
+      const parsed = parsePgn(result.pgn, result.username);
+      if (!parsed.length) throw new Error(`No games found for "${result.username}".`);
+      updateComparePlayer(slot, {
+        games: parsed,
+        isLoading: false,
+        status: `Loaded ${result.gamesFound.toLocaleString()} games`,
+        summary: {
+          username: result.username,
+          totalGames: parsed.length,
+          firstDate: parsed[0]?.date ?? null,
+          lastDate: parsed.at(-1)?.date ?? null,
+          importedAt: new Date().toISOString(),
+        },
+        username: result.username,
+      });
+    } catch (err) {
+      updateComparePlayer(slot, {
+        error: err instanceof Error ? err.message : "Could not load Chess.com data.",
+        isLoading: false,
+        status: "Needs attention",
+      });
+    }
+  }
+
   const progressPercent = progress?.archivesFound
     ? Math.round((progress.archivesDone / progress.archivesFound) * 100)
     : games.length
@@ -179,6 +246,10 @@ export function App() {
           <button className={activeView === "games" ? "active" : ""} onClick={() => setActiveView("games")} type="button">
             <Swords size={20} />
             Games
+          </button>
+          <button className={activeView === "compare" ? "active" : ""} onClick={() => setActiveView("compare")} type="button">
+            <Users size={20} />
+            Compare with Friends
           </button>
           <button className={activeView === "settings" ? "active" : ""} onClick={() => setActiveView("settings")} type="button">
             <Gauge size={20} />
@@ -424,6 +495,15 @@ export function App() {
 
       {activeView === "games" ? <GameHistory games={[...rangedGames].slice(-80).reverse()} /> : null}
 
+      {activeView === "compare" ? (
+        <CompareFriendsPage
+          players={comparePlayers}
+          timeSheet={timeSheet}
+          onLoad={loadComparePlayer}
+          onUsernameChange={(slot, value) => updateComparePlayer(slot, { username: value })}
+        />
+      ) : null}
+
       {activeView === "profile" ? (
         <ProfilePage
           allGames={games.length}
@@ -462,6 +542,10 @@ export function App() {
         <button className={activeView === "profile" ? "active" : ""} onClick={() => setActiveView("profile")} type="button">
           <Target size={22} />
           Profile
+        </button>
+        <button className={activeView === "compare" ? "active" : ""} onClick={() => setActiveView("compare")} type="button">
+          <Users size={22} />
+          Compare
         </button>
         <button className={activeView === "settings" ? "active" : ""} onClick={() => setActiveView("settings")} type="button">
           <Gauge size={22} />
@@ -627,11 +711,11 @@ function ActivityHeatmap({
               </div>
               <div className="heatGames">
                 {[...dayGames].slice(-4).reverse().map((game) => (
-                  <a href={game.url ?? "#"} key={game.id} rel="noreferrer" target="_blank">
-                    <strong>{game.result.toUpperCase()}</strong>
+                  <GameActionShell className="heatGameLink" game={game} key={game.id}>
+                    <strong className={`resultText ${game.result}`}>{game.result.toUpperCase()}</strong>
                     <span>{game.opponent}</span>
                     <em>{game.userElo ?? "-"} ELO</em>
-                  </a>
+                  </GameActionShell>
                 ))}
               </div>
             </>
@@ -655,6 +739,25 @@ function ActivityHeatmap({
 }
 
 function GameHistory({ games }: { games: ChessGame[] }) {
+  const [isFiltering, setIsFiltering] = useState(false);
+  const [query, setQuery] = useState("");
+  const [resultFilter, setResultFilter] = useState<ResultFilter>("all");
+  const visibleGames = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase();
+
+    return games.filter((game) => {
+      const matchesResult = resultFilter === "all" || game.result === resultFilter;
+      const haystack = [
+        game.opponent,
+        game.opening ?? "",
+        game.eco ?? "",
+        game.timeControl,
+        timeSheetLabels[game.timeSheet],
+      ].join(" ").toLowerCase();
+      return matchesResult && (!normalizedQuery || haystack.includes(normalizedQuery));
+    });
+  }, [games, query, resultFilter]);
+
   return (
     <section className="gamesPreview" id="games">
       <div className="gamesHeader">
@@ -662,13 +765,28 @@ function GameHistory({ games }: { games: ChessGame[] }) {
           <h2>Game History</h2>
           <p>Recent matches, openings, and rating swings.</p>
         </div>
-        <button type="button">
+        <button className={isFiltering ? "active" : ""} onClick={() => setIsFiltering((value) => !value)} type="button">
           <Search size={17} />
           Filter
         </button>
       </div>
+      {isFiltering ? (
+        <div className="gameFilters">
+          <label>
+            <span>Search</span>
+            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Opponent, opening, time" />
+          </label>
+          <div className="resultFilters" aria-label="Filter by result">
+            {(["all", "win", "loss", "draw"] as ResultFilter[]).map((result) => (
+              <button className={resultFilter === result ? "active" : ""} key={result} onClick={() => setResultFilter(result)} type="button">
+                {result}
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
       <div className="gameRows">
-        {games.map((game) => {
+        {visibleGames.map((game) => {
           const letter = game.result === "win" ? "W" : game.result === "loss" ? "L" : "D";
           const elo = game.eloDiff === null ? "" : `${game.eloDiff > 0 ? "+" : ""}${game.eloDiff} ELO`;
           return (
@@ -682,14 +800,341 @@ function GameHistory({ games }: { games: ChessGame[] }) {
                 <strong>{game.opponent}</strong>
                 <small>{game.opening ?? game.eco ?? "Unknown opening"} • {game.moveCount} moves</small>
               </div>
-              <a href={game.url ?? "#"} target="_blank" rel="noreferrer">
+              <GameActionShell game={game}>
                 Analyze
-              </a>
+              </GameActionShell>
             </article>
           );
         })}
+        {!visibleGames.length ? <p className="emptyRows">No games match those filters.</p> : null}
       </div>
     </section>
+  );
+}
+
+function GameActionShell({
+  children,
+  className,
+  game,
+}: {
+  children: React.ReactNode;
+  className?: string;
+  game: ChessGame;
+}) {
+  if (!game.url) {
+    return <span className={["disabledLink", className].filter(Boolean).join(" ")}>{children}</span>;
+  }
+
+  return (
+    <a className={className} href={game.url} target="_blank" rel="noreferrer">
+      {children}
+    </a>
+  );
+}
+
+function CompareFriendsPage({
+  onLoad,
+  onUsernameChange,
+  players,
+  timeSheet,
+}: {
+  onLoad: (slot: CompareSlot) => Promise<void>;
+  onUsernameChange: (slot: CompareSlot, value: string) => void;
+  players: Record<CompareSlot, ComparePlayer>;
+  timeSheet: TimeSheet;
+}) {
+  const leftStats = buildCompareStats(players.left, timeSheet);
+  const rightStats = buildCompareStats(players.right, timeSheet);
+  const leftName = displayCompareName(players.left, "Player one");
+  const rightName = displayCompareName(players.right, "Player two");
+  const ratingRows = combinedRatingSeries(leftStats.ratingRows, rightStats.ratingRows);
+  const skillRows = [
+    compareSkill("Aggression", leftStats.aggression, rightStats.aggression),
+    compareSkill("Tactics", leftStats.score, rightStats.score),
+    compareSkill("Endgame", leftStats.endgameSignal, rightStats.endgameSignal),
+    compareSkill("Opening Knowledge", leftStats.openingSignal, rightStats.openingSignal),
+  ];
+  const comparisonRows = [
+    compareStat("Latest rating", leftStats.latestElo, rightStats.latestElo, "higher"),
+    compareStat("Peak rating", leftStats.bestElo, rightStats.bestElo, "higher"),
+    compareStat("Score", leftStats.score, rightStats.score, "higher", "%"),
+    compareStat("Games", leftStats.games, rightStats.games, "higher"),
+    compareStat("Average opponent", leftStats.avgOpponent, rightStats.avgOpponent, "higher"),
+    compareStat("Best win streak", leftStats.bestWinStreak, rightStats.bestWinStreak, "higher"),
+  ];
+
+  return (
+    <section className="comparePage">
+      <article className="compareHero">
+        <span className="microLabel">
+          <Users size={15} aria-hidden="true" />
+          Compare with Friends
+        </span>
+        <h2>{timeSheetLabels[timeSheet]} head-to-head stats</h2>
+        <p>Load two Chess.com usernames and compare their rating, record, score, activity, streaks, and opening signals in the selected time-control sheet.</p>
+      </article>
+
+      <div className="compareInputs">
+        <ComparePlayerCard player={players.left} slot="left" stats={leftStats} onLoad={onLoad} onUsernameChange={onUsernameChange} />
+        <ComparePlayerCard player={players.right} slot="right" stats={rightStats} onLoad={onLoad} onUsernameChange={onUsernameChange} />
+      </div>
+
+      <section className="compareMatchup" aria-label="Player matchup">
+        <CompareAvatarPanel isPrimary label={leftName} rating={leftStats.latestElo} />
+        <div className="versusMark">
+          <span />
+          <strong>VS</strong>
+          <span />
+        </div>
+        <CompareAvatarPanel label={rightName} rating={rightStats.latestElo} />
+      </section>
+
+      <article className="skillPanel">
+        <div className="panelHeader">
+          <span>
+            <Target size={17} />
+          </span>
+          <h2>Skill Attributes</h2>
+        </div>
+        <div className="skillGrid">
+          {skillRows.map((skill) => (
+            <div className="skillItem" key={skill.label}>
+              <div>
+                <span>{skill.label}</span>
+                <strong>{skill.left} / {skill.right}</strong>
+              </div>
+              <CompareProgressBar value={skill.left} variant="primary" />
+              <CompareProgressBar value={skill.right} variant="friend" />
+            </div>
+          ))}
+        </div>
+        <div className="compareLegend">
+          <span><i className="primarySwatch" /> {leftName}</span>
+          <span><i className="friendSwatch" /> {rightName}</span>
+        </div>
+      </article>
+
+      <section className="compareFeatureGrid">
+        <CompareFeatureCard
+          icon={<Target size={20} />}
+          label="Avg Precision"
+          leftLabel={leftName}
+          leftValue={`${leftStats.score}%`}
+          rightLabel={rightName}
+          rightValue={`${rightStats.score}%`}
+        />
+        <article className="compareFeatureCard">
+          <div className="featureHeader">
+            <span>Win Rate (White / Black)</span>
+            <Crown size={20} />
+          </div>
+          <div className="colorCompareRows">
+            <ColorCompareRow label="White" left={leftStats.whiteWinRate} right={rightStats.whiteWinRate} />
+            <ColorCompareRow label="Black" left={leftStats.blackWinRate} right={rightStats.blackWinRate} />
+          </div>
+        </article>
+        <CompareFeatureCard
+          icon={<Swords size={20} />}
+          label="Opening Signal"
+          leftLabel={leftStats.topOpening?.name ?? "No opening yet"}
+          leftValue={`${leftStats.openingSignal}%`}
+          rightLabel={rightStats.topOpening?.name ?? "No opening yet"}
+          rightValue={`${rightStats.openingSignal}%`}
+        />
+        <article className="compareFeatureCard">
+          <div className="featureHeader">
+            <span>Weekly Activity</span>
+            <CalendarClock size={20} />
+          </div>
+          <div className="weeklyBars" aria-hidden="true">
+            {leftStats.weeklyBars.map((height, index) => <i className="leftBar" key={`l-${index}`} style={{ height: `${height}%` }} />)}
+            {rightStats.weeklyBars.map((height, index) => <i className="rightBar" key={`r-${index}`} style={{ height: `${height}%` }} />)}
+          </div>
+          <div className="featureDuo">
+            <strong>{leftStats.weeklyGames}</strong>
+            <strong>{rightStats.weeklyGames}</strong>
+          </div>
+          <small>games per week</small>
+        </article>
+      </section>
+
+      <article className="compareTable">
+        <div className="panelHeader">
+          <span>
+            <Trophy size={17} />
+          </span>
+          <h2>Stat Comparison</h2>
+        </div>
+        <div className="compareRows">
+          {comparisonRows.map((row) => (
+            <div className="compareRow" key={row.label}>
+              <strong className={row.winner === "left" ? "winner" : ""}>{row.left}</strong>
+              <span>{row.label}</span>
+              <strong className={row.winner === "right" ? "winner" : ""}>{row.right}</strong>
+            </div>
+          ))}
+        </div>
+      </article>
+
+      <article className="ratingOverlayPanel">
+        <div className="panelHeader">
+          <span>
+            <BarChart3 size={17} />
+          </span>
+          <h2>Rating History Overlay</h2>
+        </div>
+        <div className="compareChart">
+          {ratingRows.length ? (
+            <ResponsiveContainer width="100%" height={280}>
+              <LineChart data={ratingRows}>
+                <CartesianGrid strokeDasharray="4 4" vertical={false} />
+                <XAxis dataKey="date" minTickGap={26} />
+                <YAxis width={48} domain={["dataMin - 20", "dataMax + 20"]} />
+                <Tooltip />
+                <Legend />
+                <Line connectNulls dataKey="left" name={leftName} dot={false} stroke="#9fd668" strokeWidth={4} type="monotone" />
+                <Line connectNulls dataKey="right" name={rightName} dot={false} stroke="#c8c6c6" strokeWidth={3} type="monotone" />
+              </LineChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="emptyChart">Load both players to overlay their rating history.</div>
+          )}
+        </div>
+        <p>
+          {leftName} is {ratingDeltaPhrase(leftStats.ratingChange)} in this sheet; {rightName} is {ratingDeltaPhrase(rightStats.ratingChange)}.
+        </p>
+      </article>
+    </section>
+  );
+}
+
+function CompareAvatarPanel({ isPrimary = false, label, rating }: { isPrimary?: boolean; label: string; rating: number | null }) {
+  return (
+    <div className="compareAvatarPanel">
+      <div className={`compareAvatar ${isPrimary ? "primary" : ""}`}>
+        <Crown size={42} aria-hidden="true" />
+      </div>
+      <div>
+        <p>{label}</p>
+        <span>{formatNumber(rating) ?? "-"} ELO</span>
+      </div>
+    </div>
+  );
+}
+
+function CompareProgressBar({ value, variant }: { value: number; variant: "primary" | "friend" }) {
+  return (
+    <div className={`skillTrack ${variant}`}>
+      <span style={{ width: `${clampPercent(value)}%` }} />
+    </div>
+  );
+}
+
+function CompareFeatureCard({
+  icon,
+  label,
+  leftLabel,
+  leftValue,
+  rightLabel,
+  rightValue,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  leftLabel: string;
+  leftValue: string;
+  rightLabel: string;
+  rightValue: string;
+}) {
+  return (
+    <article className="compareFeatureCard">
+      <div className="featureHeader">
+        <span>{label}</span>
+        {icon}
+      </div>
+      <div className="featureDuo">
+        <div>
+          <strong>{leftValue}</strong>
+          <small>{leftLabel}</small>
+        </div>
+        <div>
+          <strong>{rightValue}</strong>
+          <small>{rightLabel}</small>
+        </div>
+      </div>
+    </article>
+  );
+}
+
+function ColorCompareRow({ label, left, right }: { label: string; left: number; right: number }) {
+  return (
+    <div className="colorCompareRow">
+      <span>{label}</span>
+      <div>
+        <i className="leftFill" style={{ width: `${clampPercent(left)}%` }} />
+        <i className="rightFill" style={{ width: `${clampPercent(right)}%` }} />
+      </div>
+      <strong>{left}% vs {right}%</strong>
+    </div>
+  );
+}
+
+function ComparePlayerCard({
+  onLoad,
+  onUsernameChange,
+  player,
+  slot,
+  stats,
+}: {
+  onLoad: (slot: CompareSlot) => Promise<void>;
+  onUsernameChange: (slot: CompareSlot, value: string) => void;
+  player: ComparePlayer;
+  slot: CompareSlot;
+  stats: ReturnType<typeof buildCompareStats>;
+}) {
+  return (
+    <article className="compareCard">
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          void onLoad(slot);
+        }}
+      >
+        <label>
+          <span>{slot === "left" ? "Player one" : "Player two"}</span>
+          <div className="inputWrap">
+            <Search size={17} aria-hidden="true" />
+            <input value={player.username} onChange={(event) => onUsernameChange(slot, event.target.value)} placeholder="Chess.com username" />
+          </div>
+        </label>
+        <button disabled={player.isLoading} type="submit">
+          {player.isLoading ? <RefreshCw className="spin" size={18} /> : <GitBranch size={18} />}
+          Load
+        </button>
+      </form>
+
+      <div className="compareIdentity">
+        <span className="microLabel">{player.status}</span>
+        <h3>{player.summary?.username ?? "Waiting for player"}</h3>
+        <p>{player.summary ? `${formatDate(player.summary.firstDate)} to ${formatDate(player.summary.lastDate)}` : "Enter a username to compare this player."}</p>
+      </div>
+
+      {player.error ? <div className="errorBanner compact">{player.error}</div> : null}
+
+      <div className="compareStatGrid">
+        <MiniStat label="Rating" value={formatNumber(stats.latestElo) ?? "-"} />
+        <MiniStat label="Peak" value={formatNumber(stats.bestElo) ?? "-"} />
+        <MiniStat label="Games" value={stats.games.toLocaleString()} />
+        <MiniStat label="Score" value={`${stats.score}%`} />
+        <MiniStat label="Record" value={<RecordValue wins={stats.wins} losses={stats.losses} draws={stats.draws} />} />
+        <MiniStat label="Best streak" value={`${stats.bestWinStreak}W`} />
+      </div>
+
+      <div className="compareOpening">
+        <span>Best opening signal</span>
+        <strong>{stats.topOpening?.name ?? "Not enough games"}</strong>
+        <small>{stats.topOpening ? `${stats.topOpening.games} games • ${stats.topOpening.score}% score` : "Load games to calculate."}</small>
+      </div>
+    </article>
   );
 }
 
@@ -849,4 +1294,104 @@ function activityLevel(games: number, maxGames: number) {
   if (ratio >= 0.45) return 3;
   if (ratio >= 0.2) return 2;
   return 1;
+}
+
+function buildCompareStats(player: ComparePlayer, timeSheet: TimeSheet) {
+  const games = filterByTimeSheet(player.games, timeSheet);
+  const totals = summarize(games);
+  const streak = streaks(games);
+  const topOpening = topOpenings(games, 1)[0] ?? null;
+  const ratingRows = eloSeries(games).slice(-30);
+
+  return {
+    ...totals,
+    aggression: totals.games ? Math.round(((totals.wins + totals.losses) / totals.games) * 100) : 0,
+    bestWinStreak: streak.bestWins,
+    blackWinRate: winRateForColor(games, "black"),
+    endgameSignal: totals.avgMoves ? clampPercent(Math.round(totals.avgMoves * 1.7)) : 0,
+    openingSignal: topOpening?.score ?? 0,
+    ratingChange: totals.eloChange,
+    ratingRows,
+    topOpening,
+    weeklyBars: weeklyBars(games),
+    weeklyGames: weeklyActivity(games),
+    whiteWinRate: winRateForColor(games, "white"),
+  };
+}
+
+function displayCompareName(player: ComparePlayer, fallback: string) {
+  return player.summary?.username || player.username.trim() || fallback;
+}
+
+function compareSkill(label: string, left: number, right: number) {
+  return { label, left: clampPercent(left), right: clampPercent(right) };
+}
+
+function combinedRatingSeries(
+  leftRows: Array<{ date: string; elo: number }>,
+  rightRows: Array<{ date: string; elo: number }>
+) {
+  const rows = new Map<string, { date: string; left: number | null; right: number | null }>();
+
+  for (const row of leftRows) {
+    rows.set(row.date, { ...(rows.get(row.date) ?? { date: row.date, left: null, right: null }), left: row.elo });
+  }
+
+  for (const row of rightRows) {
+    rows.set(row.date, { ...(rows.get(row.date) ?? { date: row.date, left: null, right: null }), right: row.elo });
+  }
+
+  return [...rows.values()].sort((a, b) => a.date.localeCompare(b.date)).slice(-30);
+}
+
+function winRateForColor(games: ChessGame[], color: ChessGame["userColor"]) {
+  const colorGames = games.filter((game) => game.userColor === color);
+  if (!colorGames.length) return 0;
+  const wins = colorGames.filter((game) => game.result === "win").length;
+  return Math.round((wins / colorGames.length) * 100);
+}
+
+function weeklyActivity(games: ChessGame[]) {
+  if (!games.length) return 0;
+  const first = games[0].timestamp;
+  const latest = games.at(-1)?.timestamp ?? first;
+  const weeks = Math.max(1, Math.ceil((latest - first) / (7 * 86_400_000)));
+  return Math.round(games.length / weeks);
+}
+
+function weeklyBars(games: ChessGame[]) {
+  const recent = games.slice(-35);
+  const buckets = Array.from({ length: 5 }, (_, index) => recent.slice(index * 7, index * 7 + 7).length);
+  const max = Math.max(1, ...buckets);
+  return buckets.map((count) => Math.max(12, Math.round((count / max) * 100)));
+}
+
+function ratingDeltaPhrase(value: number | null) {
+  if (value === null) return "waiting for rating data";
+  if (value > 0) return `up +${value} points`;
+  if (value < 0) return `down ${value} points`;
+  return "flat at 0 points";
+}
+
+function clampPercent(value: number) {
+  if (!Number.isFinite(value)) return 0;
+  return Math.max(0, Math.min(100, value));
+}
+
+function compareStat(
+  label: string,
+  leftValue: number | null,
+  rightValue: number | null,
+  direction: "higher",
+  suffix = ""
+) {
+  const left = leftValue === null ? "-" : `${leftValue.toLocaleString()}${suffix}`;
+  const right = rightValue === null ? "-" : `${rightValue.toLocaleString()}${suffix}`;
+  let winner: CompareSlot | null = null;
+
+  if (leftValue !== null && rightValue !== null && leftValue !== rightValue) {
+    winner = direction === "higher" ? (leftValue > rightValue ? "left" : "right") : null;
+  }
+
+  return { label, left, right, winner };
 }

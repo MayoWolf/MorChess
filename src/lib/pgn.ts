@@ -12,10 +12,12 @@ export function parsePgn(pgn: string, username: string): ChessGame[] {
   const lowerUser = username.trim().toLowerCase();
   if (!lowerUser) return [];
 
-  return splitGames(pgn)
+  const games = splitGames(pgn)
     .map((raw) => parseGame(raw, lowerUser))
     .filter((game): game is ChessGame => Boolean(game))
     .sort((a, b) => a.timestamp - b.timestamp);
+
+  return withRatingChanges(games);
 }
 
 function splitGames(pgn: string) {
@@ -64,7 +66,7 @@ function parseGame(raw: string, lowerUser: string): ChessGame | null {
     resultText: headers.Result ?? "*",
     userElo,
     opponentElo,
-    eloDiff: userElo !== null && opponentElo !== null ? userElo - opponentElo : null,
+    eloDiff: null,
     timeControl,
     timeClass: classifyTime(timeControl),
     timeSheet: classifyTimeSheet(timeControl),
@@ -77,6 +79,22 @@ function parseGame(raw: string, lowerUser: string): ChessGame | null {
     opponentClockSeconds: clocks.opponentSeconds,
     raw,
   };
+}
+
+function withRatingChanges(games: ChessGame[]) {
+  const previousRatingBySheet = new Map<TimeSheet, number>();
+
+  return games.map((game) => {
+    if (game.userElo === null) return { ...game, eloDiff: null };
+
+    const previousRating = previousRatingBySheet.get(game.timeSheet);
+    previousRatingBySheet.set(game.timeSheet, game.userElo);
+
+    return {
+      ...game,
+      eloDiff: previousRating === undefined ? null : game.userElo - previousRating,
+    };
+  });
 }
 
 function parseHeaders(raw: string): Headers {
