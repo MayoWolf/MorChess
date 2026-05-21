@@ -404,8 +404,8 @@ export function App() {
             <ResponsiveContainer width="100%" height={300}>
               <BarChart data={hourRows}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="name" interval={2} />
-                <YAxis />
+                <XAxis dataKey="name" minTickGap={20} />
+                <YAxis width={36} />
                 <Tooltip />
                 <Bar dataKey="games" fill="#81b64c" radius={[4, 4, 0, 0]} />
               </BarChart>

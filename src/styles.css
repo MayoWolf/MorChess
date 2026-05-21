@@ -1513,6 +1513,19 @@ input:focus {
     flex-direction: column;
   }
 
+  .chartPanel,
+  .tablePanel {
+    overflow: hidden;
+  }
+
+  .recharts-text {
+    font-size: 0.6rem;
+  }
+
+  .recharts-cartesian-axis-tick-value {
+    font-size: 0.58rem;
+  }
+
   .gameRow {
     grid-template-columns: auto minmax(0, 1fr);
   }
