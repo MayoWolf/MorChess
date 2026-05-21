@@ -75,6 +75,7 @@ export function App() {
   const [progress, setProgress] = useState<FetchProgress | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [selectedHeatDate, setSelectedHeatDate] = useState<string | null>(null);
 
   const availableSheets = useMemo(() => availableTimeSheets(games), [games]);
   const sheetGames = useMemo(() => filterByTimeSheet(games, timeSheet), [games, timeSheet]);
@@ -93,6 +94,11 @@ export function App() {
   const hourRows = useMemo(() => hourlyHeat(rangedGames), [rangedGames]);
   const streakRows = useMemo(() => streaks(rangedGames), [rangedGames]);
   const recentGames = useMemo(() => [...rangedGames].slice(-5).reverse(), [rangedGames]);
+  const heatmapYears = useMemo(() => buildActivityYears(sheetGames), [sheetGames]);
+  const selectedHeatGames = useMemo(
+    () => (selectedHeatDate ? sheetGames.filter((game) => game.date.slice(0, 10) === selectedHeatDate) : []),
+    [selectedHeatDate, sheetGames]
+  );
 
   useEffect(() => {
     if (games.length && !availableSheets.includes(timeSheet)) {
@@ -302,7 +308,7 @@ export function App() {
           <div className="deckStats">
             <MiniStat label={`${timeSheetLabels[timeSheet]} Games`} value={allTotals.games.toLocaleString()} />
             <MiniStat label="Peak" value={formatNumber(allTotals.bestElo) ?? "-"} />
-            <MiniStat label="Record" value={`${allTotals.wins}-${allTotals.losses}-${allTotals.draws}`} />
+            <MiniStat label="Record" value={<RecordValue wins={allTotals.wins} losses={allTotals.losses} draws={allTotals.draws} />} />
           </div>
         </div>
 
@@ -420,6 +426,14 @@ export function App() {
           <TablePanel title="Best Opening Signals" rows={openingRows} />
           <TablePanel title="Frequent Opponents" rows={opponentRows} />
 
+          <ActivityHeatmap
+            dayGames={selectedHeatGames}
+            onSelectDate={setSelectedHeatDate}
+            selectedDate={selectedHeatDate}
+            timeSheet={timeSheet}
+            years={heatmapYears}
+          />
+
           <ChartPanel title="White / Black Split" icon={<Target size={17} />}>
             <div className="splitGrid">
               {colorRows.map((row) => (
@@ -519,12 +533,24 @@ export function App() {
   );
 }
 
-function MiniStat({ label, value }: { label: string; value: string }) {
+function MiniStat({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div>
       <span>{label}</span>
       <strong>{value}</strong>
     </div>
+  );
+}
+
+function RecordValue({ draws, losses, wins }: { draws: number; losses: number; wins: number }) {
+  return (
+    <span className="recordValue" aria-label={`${wins} wins, ${losses} losses, ${draws} draws`}>
+      <span className="recordWin">{wins}</span>
+      <span className="recordSep">-</span>
+      <span className="recordLoss">{losses}</span>
+      <span className="recordSep">-</span>
+      <span className="recordDraw">{draws}</span>
+    </span>
   );
 }
 
@@ -569,6 +595,121 @@ function TablePanel({ title, rows }: { title: string; rows: Array<{ name: string
             <em>{row.score}%</em>
           </div>
         ))}
+      </div>
+    </article>
+  );
+}
+
+type HeatDay = {
+  date: string;
+  dayOfWeek: number;
+  games: number;
+  level: number;
+  timestamp: number;
+  wins: number;
+  week: number;
+};
+
+type HeatYear = {
+  maxGames: number;
+  days: HeatDay[];
+  year: number;
+};
+
+function ActivityHeatmap({
+  dayGames,
+  onSelectDate,
+  selectedDate,
+  timeSheet,
+  years,
+}: {
+  dayGames: ChessGame[];
+  onSelectDate: (date: string) => void;
+  selectedDate: string | null;
+  timeSheet: TimeSheet;
+  years: HeatYear[];
+}) {
+  const daySummary = summarize(dayGames);
+  const topDayOpenings = topOpenings(dayGames, 3);
+
+  return (
+    <article className="heatmapPanel">
+      <div className="panelHeader">
+        <span>
+          <CalendarClock size={17} />
+        </span>
+        <h2>Activity Heat Map</h2>
+      </div>
+
+      <div className="heatmapShell">
+        <div className="heatmapYears">
+          {years.length ? (
+            years.map((year) => (
+              <div className="heatYear" key={year.year}>
+                <div className="heatYearLabel">{year.year}</div>
+                <div className="heatSquares" style={{ gridTemplateColumns: `repeat(${Math.max(53, ...year.days.map((day) => day.week + 1))}, 10px)` }}>
+                  {year.days.map((day) => (
+                    <button
+                      aria-label={`${formatDate(day.date)}: ${day.games} ${timeSheetLabels[timeSheet]} games`}
+                      className={day.date === selectedDate ? "selected" : ""}
+                      data-level={day.level}
+                      key={day.date}
+                      onClick={() => onSelectDate(day.date)}
+                      style={{ gridColumn: day.week + 1, gridRow: day.dayOfWeek + 1 }}
+                      title={`${formatDate(day.date)} • ${day.games} games`}
+                      type="button"
+                    />
+                  ))}
+                </div>
+              </div>
+            ))
+          ) : (
+            <div className="heatEmpty">Pull data to build your yearly activity map.</div>
+          )}
+        </div>
+
+        <aside className="heatDetails">
+          <span className="microLabel">Selected day</span>
+          <h3>{selectedDate ? formatDate(selectedDate) : "Pick a square"}</h3>
+          <div className="heatStats">
+            <MiniStat label="Games" value={dayGames.length.toLocaleString()} />
+            <MiniStat label="Record" value={<RecordValue wins={daySummary.wins} losses={daySummary.losses} draws={daySummary.draws} />} />
+            <MiniStat label="Score" value={`${daySummary.score}%`} />
+          </div>
+          {dayGames.length ? (
+            <>
+              <div className="heatOpenings">
+                {topDayOpenings.map((row) => (
+                  <div key={row.name}>
+                    <strong>{row.name}</strong>
+                    <span>{row.games} games • {row.score}%</span>
+                  </div>
+                ))}
+              </div>
+              <div className="heatGames">
+                {[...dayGames].slice(-4).reverse().map((game) => (
+                  <a href={game.url ?? "#"} key={game.id} rel="noreferrer" target="_blank">
+                    <strong>{game.result.toUpperCase()}</strong>
+                    <span>{game.opponent}</span>
+                    <em>{game.userElo ?? "-"} ELO</em>
+                  </a>
+                ))}
+              </div>
+            </>
+          ) : (
+            <p>No games on this day in the {timeSheetLabels[timeSheet]} sheet.</p>
+          )}
+        </aside>
+      </div>
+
+      <div className="heatLegend" aria-hidden="true">
+        <span>Less</span>
+        <i data-level="0" />
+        <i data-level="1" />
+        <i data-level="2" />
+        <i data-level="3" />
+        <i data-level="4" />
+        <span>More</span>
       </div>
     </article>
   );
@@ -741,7 +882,12 @@ function signed(value: number | null) {
 
 function formatDate(value: string | null) {
   if (!value) return "-";
-  return new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", year: "numeric" }).format(new Date(value));
+  return new Intl.DateTimeFormat(undefined, {
+    day: "numeric",
+    month: "short",
+    timeZone: value.length === 10 ? "UTC" : undefined,
+    year: "numeric",
+  }).format(new Date(value));
 }
 
 function formatClock(value: number | null) {
@@ -749,4 +895,54 @@ function formatClock(value: number | null) {
   const hours = Math.floor(value / 3600);
   const minutes = Math.round((value % 3600) / 60);
   return hours ? `${hours}h ${minutes}m` : `${minutes}m`;
+}
+
+function buildActivityYears(games: ChessGame[]): HeatYear[] {
+  const years = availableYears(games).sort((a, b) => a - b);
+  const counts = new Map<string, { games: number; wins: number }>();
+
+  for (const game of games) {
+    const date = game.date.slice(0, 10);
+    const existing = counts.get(date) ?? { games: 0, wins: 0 };
+    existing.games += 1;
+    if (game.result === "win") existing.wins += 1;
+    counts.set(date, existing);
+  }
+
+  return years.map((year) => {
+    const start = Date.UTC(year, 0, 1);
+    const end = Date.UTC(year, 11, 31);
+    const days: HeatDay[] = [];
+
+    for (let timestamp = start; timestamp <= end; timestamp += 86_400_000) {
+      const date = new Date(timestamp).toISOString().slice(0, 10);
+      const count = counts.get(date) ?? { games: 0, wins: 0 };
+      const week = Math.floor((timestamp - start + new Date(start).getUTCDay() * 86_400_000) / (7 * 86_400_000));
+      days.push({
+        date,
+        dayOfWeek: new Date(timestamp).getUTCDay(),
+        games: count.games,
+        level: 0,
+        timestamp,
+        wins: count.wins,
+        week,
+      });
+    }
+
+    const maxGames = Math.max(0, ...days.map((day) => day.games));
+    return {
+      maxGames,
+      days: days.map((day) => ({ ...day, level: activityLevel(day.games, maxGames) })),
+      year,
+    };
+  });
+}
+
+function activityLevel(games: number, maxGames: number) {
+  if (!games || !maxGames) return 0;
+  const ratio = games / maxGames;
+  if (ratio >= 0.75) return 4;
+  if (ratio >= 0.45) return 3;
+  if (ratio >= 0.2) return 2;
+  return 1;
 }

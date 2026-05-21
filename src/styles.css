@@ -383,8 +383,8 @@ input:focus {
 .sheetButtons button {
   display: inline-flex;
   min-height: 44px;
-  min-width: 120px;
-  flex: 1;
+  min-width: 162px;
+  flex: 0 0 162px;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
@@ -402,6 +402,7 @@ input:focus {
 }
 
 .sheetButtons button span {
+  flex: 0 0 auto;
   min-width: 28px;
   border-radius: 999px;
   color: var(--draw-gray);
@@ -944,6 +945,262 @@ input:focus {
   font-weight: 900;
 }
 
+.heatmapPanel {
+  grid-column: 1 / -1;
+  min-height: 420px;
+  border: 2px solid var(--outline-variant);
+  border-radius: 12px;
+  background: var(--surface-bright);
+  box-shadow: var(--card-shadow);
+  padding: 18px;
+}
+
+.heatmapShell {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 18px;
+  align-items: stretch;
+}
+
+.heatmapYears {
+  display: grid;
+  gap: 18px;
+  min-width: 0;
+  overflow-x: auto;
+  padding: 2px 4px 8px 0;
+}
+
+.heatYear {
+  display: grid;
+  grid-template-columns: 56px minmax(620px, 1fr);
+  gap: 12px;
+  align-items: start;
+  border-top: 1px solid rgba(194, 201, 182, 0.16);
+  padding-top: 14px;
+}
+
+.heatYear:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.heatYearLabel {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  color: var(--primary);
+  background: var(--surface-bright);
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.78rem;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+}
+
+.heatSquares {
+  display: grid;
+  grid-auto-flow: column;
+  grid-template-rows: repeat(7, 10px);
+  gap: 3px;
+  width: max-content;
+  border-left: 1px solid rgba(194, 201, 182, 0.12);
+  padding-left: 10px;
+}
+
+.heatSquares button,
+.heatLegend i {
+  width: 10px;
+  height: 10px;
+  border: 1px solid rgba(194, 201, 182, 0.12);
+  border-radius: 2px;
+  background: var(--surface-container);
+  padding: 0;
+}
+
+.heatSquares button {
+  transition:
+    border-color 120ms ease,
+    box-shadow 120ms ease,
+    transform 120ms ease;
+}
+
+.heatSquares button:hover,
+.heatSquares button.selected {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px rgba(159, 214, 104, 0.22);
+  transform: scale(1.22);
+}
+
+.heatSquares button[data-level="1"],
+.heatLegend i[data-level="1"] {
+  background: rgba(159, 214, 104, 0.24);
+}
+
+.heatSquares button[data-level="2"],
+.heatLegend i[data-level="2"] {
+  background: rgba(159, 214, 104, 0.45);
+}
+
+.heatSquares button[data-level="3"],
+.heatLegend i[data-level="3"] {
+  background: rgba(129, 182, 76, 0.72);
+}
+
+.heatSquares button[data-level="4"],
+.heatLegend i[data-level="4"] {
+  background: var(--primary);
+}
+
+.heatEmpty {
+  border: 1px dashed var(--outline-variant);
+  border-radius: 10px;
+  color: var(--on-surface-variant);
+  padding: 28px;
+  text-align: center;
+}
+
+.heatDetails {
+  border: 2px solid var(--outline-variant);
+  border-radius: 10px;
+  background: var(--surface);
+  padding: 16px;
+}
+
+.heatDetails h3 {
+  margin: 8px 0 14px;
+  color: var(--primary);
+  font-family: "Plus Jakarta Sans", sans-serif;
+  font-size: 1.35rem;
+  font-weight: 900;
+}
+
+.heatStats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.heatStats > div {
+  border: 1px solid var(--outline-variant);
+  border-radius: 8px;
+  background: var(--surface-container);
+  padding: 10px;
+}
+
+.heatStats span,
+.heatOpenings span,
+.heatGames em {
+  display: block;
+  color: var(--draw-gray);
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.heatStats strong {
+  display: block;
+  margin-top: 4px;
+  color: var(--on-surface);
+  font-family: "Plus Jakarta Sans", sans-serif;
+  font-size: 1.2rem;
+  font-weight: 900;
+}
+
+.recordValue {
+  display: inline-flex !important;
+  align-items: baseline;
+  gap: 3px;
+  color: var(--on-surface);
+  font-family: inherit !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+  white-space: nowrap;
+}
+
+.recordValue span {
+  display: inline !important;
+  margin: 0 !important;
+  font-family: inherit !important;
+  font-size: inherit !important;
+  font-weight: inherit !important;
+  letter-spacing: 0 !important;
+  line-height: inherit !important;
+  text-transform: none !important;
+}
+
+.recordValue .recordWin {
+  color: var(--win-green);
+}
+
+.recordValue .recordLoss {
+  color: var(--loss-red);
+}
+
+.recordValue .recordDraw {
+  color: var(--on-surface);
+}
+
+.recordValue .recordSep {
+  color: var(--draw-gray);
+}
+
+.heatOpenings,
+.heatGames {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.heatOpenings div,
+.heatGames a {
+  display: grid;
+  gap: 2px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  color: var(--on-surface);
+  background: var(--surface-container-low);
+  padding: 9px 10px;
+  text-decoration: none;
+}
+
+.heatOpenings strong,
+.heatGames strong,
+.heatGames span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.heatGames a {
+  grid-template-columns: 48px minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.heatGames strong {
+  color: var(--primary);
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.75rem;
+}
+
+.heatDetails p {
+  color: var(--on-surface-variant);
+  line-height: 1.5;
+}
+
+.heatLegend {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  align-items: center;
+  margin-top: 14px;
+  color: var(--draw-gray);
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.68rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
 .splitGrid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1094,6 +1351,7 @@ input:focus {
   .appHeader,
   .commandGrid,
   .dashboardGrid,
+  .heatmapShell,
   .settingsGrid {
     grid-template-columns: 1fr;
   }
