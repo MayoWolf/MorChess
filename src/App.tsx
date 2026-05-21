@@ -3,8 +3,6 @@ import {
   BarChart3,
   CalendarClock,
   Crown,
-  Download,
-  FileUp,
   Gauge,
   GitBranch,
   Hourglass,
@@ -14,7 +12,6 @@ import {
   Target,
   Timer,
   Trophy,
-  Upload,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -62,15 +59,14 @@ const ranges: Array<{ key: RangeKey; label: string }> = [
 type ViewKey = "profile" | "analytics" | "games" | "settings";
 
 export function App() {
-  const [username, setUsername] = useState("mayowolf46");
+  const [username, setUsername] = useState("");
   const [games, setGames] = useState<ChessGame[]>([]);
   const [summary, setSummary] = useState<ParseSummary | null>(null);
   const [range, setRange] = useState<RangeKey>("all");
   const [timeSheet, setTimeSheet] = useState<TimeSheet>("10m");
   const [activeView, setActiveView] = useState<ViewKey>("analytics");
   const [selectedYear, setSelectedYear] = useState(new Date().getUTCFullYear());
-  const [startYear, setStartYear] = useState("");
-  const [endYear, setEndYear] = useState(String(new Date().getUTCFullYear()));
+
   const [status, setStatus] = useState("Ready");
   const [progress, setProgress] = useState<FetchProgress | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -120,8 +116,6 @@ export function App() {
 
     try {
       const result = await fetchChessComPgn(username, {
-        startYear: startYear ? Number(startYear) : undefined,
-        endYear: endYear ? Number(endYear) : undefined,
         delayMs: 120,
         onProgress: (next) => {
           setProgress(next);
@@ -132,24 +126,6 @@ export function App() {
       setStatus(`Loaded ${result.gamesFound.toLocaleString()} games`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not load Chess.com data.");
-      setStatus("Needs attention");
-    } finally {
-      setIsLoading(false);
-    }
-  }
-
-  async function importFiles(files: FileList | null) {
-    const file = files?.[0];
-    if (!file) return;
-    setError(null);
-    setIsLoading(true);
-    setStatus("Reading PGN");
-    try {
-      const text = await file.text();
-      ingestPgn(text, username);
-      setStatus(`Imported ${file.name}`);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not import that PGN.");
       setStatus("Needs attention");
     } finally {
       setIsLoading(false);
@@ -172,16 +148,6 @@ export function App() {
       lastDate: parsed.at(-1)?.date ?? null,
       importedAt: new Date().toISOString(),
     });
-  }
-
-  function downloadPgn() {
-    const blob = new Blob([games.map((game) => game.raw).join("\n\n")], { type: "application/x-chess-pgn" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `${summary?.username ?? username}_mor_chess_export.pgn`;
-    link.click();
-    URL.revokeObjectURL(url);
   }
 
   const progressPercent = progress?.archivesFound
@@ -323,37 +289,16 @@ export function App() {
             <span>Chess.com username</span>
             <div className="inputWrap">
               <Search size={17} aria-hidden="true" />
-              <input value={username} onChange={(event) => setUsername(event.target.value)} placeholder="hikaru" />
+              <input value={username} onChange={(event) => setUsername(event.target.value)} placeholder="your username" />
             </div>
           </label>
-          <div className="twoInputs">
-            <label>
-              <span>Start year</span>
-              <input value={startYear} onChange={(event) => setStartYear(event.target.value)} placeholder="auto" />
-            </label>
-            <label>
-              <span>End year</span>
-              <input value={endYear} onChange={(event) => setEndYear(event.target.value)} placeholder="2026" />
-            </label>
-          </div>
           <button disabled={isLoading} type="submit">
             {isLoading ? <RefreshCw className="spin" size={18} /> : <GitBranch size={18} />}
             Pull PGNs
           </button>
         </form>
 
-        <div className="importPanel">
-          <label className="dropButton">
-            <FileUp size={22} aria-hidden="true" />
-            <span>Import PGN</span>
-            <input accept=".pgn,.txt" type="file" onChange={(event) => void importFiles(event.target.files)} />
-          </label>
-          <button className="ghostButton" disabled={!games.length} onClick={downloadPgn} type="button">
-            <Download size={18} />
-            Export current PGN
-          </button>
-          <p>{summary ? `${formatDate(summary.firstDate)} to ${formatDate(summary.lastDate)}` : "Drop in your existing export anytime."}</p>
-        </div>
+
       </section>
 
       {error ? <div className="errorBanner">{error}</div> : null}
@@ -469,8 +414,8 @@ export function App() {
         </section>
       ) : (
         <section className="emptyStart">
-          <Upload size={28} aria-hidden="true" />
-          <h2>Pull a username or import your PGN export to light up the board.</h2>
+          <Search size={28} aria-hidden="true" />
+          <h2>Enter your Chess.com username and pull your games to light up the board.</h2>
           <p>The app reads Chess.com PGN headers and clock comments, then builds rating, time control, opening, color, opponent, and volume views locally in your browser.</p>
         </section>
       )}
@@ -491,20 +436,14 @@ export function App() {
 
       {activeView === "settings" ? (
         <SettingsPage
-          endYear={endYear}
           isLoading={isLoading}
-          onDownload={downloadPgn}
-          onEndYearChange={setEndYear}
-          onImport={importFiles}
           onLoad={loadFromChessCom}
           onResetFilters={() => {
             setRange("all");
             setTimeSheet(bestDefaultTimeSheet(games));
             setSelectedYear(availableYears(games)[0] ?? new Date().getUTCFullYear());
           }}
-          onStartYearChange={setStartYear}
           onUsernameChange={setUsername}
-          startYear={startYear}
           username={username}
           hasGames={Boolean(games.length)}
         />
@@ -789,30 +728,18 @@ function ProfilePage({
 }
 
 function SettingsPage({
-  endYear,
   hasGames,
   isLoading,
-  onDownload,
-  onEndYearChange,
-  onImport,
   onLoad,
   onResetFilters,
-  onStartYearChange,
   onUsernameChange,
-  startYear,
   username,
 }: {
-  endYear: string;
   hasGames: boolean;
   isLoading: boolean;
-  onDownload: () => void;
-  onEndYearChange: (value: string) => void;
-  onImport: (files: FileList | null) => void;
   onLoad: () => Promise<void>;
   onResetFilters: () => void;
-  onStartYearChange: (value: string) => void;
   onUsernameChange: (value: string) => void;
-  startYear: string;
   username: string;
 }) {
   return (
@@ -832,41 +759,18 @@ function SettingsPage({
           <span>Chess.com username</span>
           <div className="inputWrap">
             <Search size={17} aria-hidden="true" />
-            <input value={username} onChange={(event) => onUsernameChange(event.target.value)} placeholder="hikaru" />
+            <input value={username} onChange={(event) => onUsernameChange(event.target.value)} placeholder="your username" />
           </div>
         </label>
-        <div className="twoInputs">
-          <label>
-            <span>Start year</span>
-            <input value={startYear} onChange={(event) => onStartYearChange(event.target.value)} placeholder="auto" />
-          </label>
-          <label>
-            <span>End year</span>
-            <input value={endYear} onChange={(event) => onEndYearChange(event.target.value)} placeholder="2026" />
-          </label>
-        </div>
         <button disabled={isLoading} type="submit">
           {isLoading ? <RefreshCw className="spin" size={18} /> : <GitBranch size={18} />}
           Pull PGNs
-        </button>
-      </form>
-
-      <article className="importPanel settingsPanel">
-        <span className="microLabel">Manual Import</span>
-        <label className="dropButton">
-          <FileUp size={22} aria-hidden="true" />
-          <span>Import PGN</span>
-          <input accept=".pgn,.txt" type="file" onChange={(event) => onImport(event.target.files)} />
-        </label>
-        <button className="ghostButton" disabled={!hasGames} onClick={onDownload} type="button">
-          <Download size={18} />
-          Export current PGN
         </button>
         <button className="ghostButton" disabled={!hasGames} onClick={onResetFilters} type="button">
           <Gauge size={18} />
           Reset filters
         </button>
-      </article>
+      </form>
     </section>
   );
 }

@@ -267,7 +267,7 @@ h1 {
   margin-top: 14px;
   color: var(--on-surface);
   font-family: "Plus Jakarta Sans", sans-serif;
-  font-size: clamp(2.2rem, 5vw, 4.8rem);
+  font-size: clamp(0.66rem, 1.5vw, 1.44rem);
   font-weight: 800;
   letter-spacing: -0.02em;
   line-height: 1.08;
@@ -427,7 +427,7 @@ input:focus {
 
 .commandGrid {
   display: grid;
-  grid-template-columns: minmax(0, 1.25fr) minmax(320px, 0.8fr) minmax(260px, 0.55fr);
+  grid-template-columns: minmax(0, 1.25fr) minmax(320px, 0.8fr);
   gap: 24px;
   align-items: stretch;
 }
@@ -480,10 +480,13 @@ input:focus {
   display: block;
   color: var(--primary);
   font-family: "Plus Jakarta Sans", sans-serif;
-  font-size: clamp(4rem, 10vw, 7rem);
+  font-size: clamp(3rem, 10vw, 7rem);
   font-weight: 800;
   letter-spacing: -0.04em;
   line-height: 0.92;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .deckHero span {
@@ -530,7 +533,10 @@ input:focus {
   margin-top: 4px;
   color: var(--on-surface);
   font-family: "Plus Jakarta Sans", sans-serif;
-  font-size: 1.25rem;
+  font-size: clamp(1rem, 2.5vw, 1.25rem);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .fetchPanel,
@@ -698,8 +704,11 @@ input:focus {
   margin-top: 4px;
   color: var(--on-surface);
   font-family: "Plus Jakarta Sans", sans-serif;
-  font-size: clamp(1.35rem, 2vw, 1.95rem);
+  font-size: clamp(1.1rem, 2vw, 1.95rem);
   line-height: 1.05;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .metricTile small {
@@ -1312,7 +1321,8 @@ input:focus {
 }
 
 .settingsGrid {
-  grid-template-columns: minmax(0, 1fr) minmax(320px, 0.7fr);
+  grid-template-columns: minmax(0, 1fr);
+  max-width: 520px;
 }
 
 .settingsPanel {
@@ -1466,7 +1476,36 @@ input:focus {
   .metricGrid,
   .profileGrid,
   .splitGrid {
-    grid-template-columns: 1fr;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .metricGrid {
+    gap: 10px;
+  }
+
+  .metricTile {
+    min-height: 120px;
+    padding: 12px;
+  }
+
+  .metricTile strong {
+    font-size: clamp(0.95rem, 4vw, 1.3rem);
+  }
+
+  .deckHero strong {
+    font-size: clamp(2.4rem, 14vw, 4rem);
+  }
+
+  .deckStats strong {
+    font-size: 0.95rem;
+  }
+
+  .splitCard strong {
+    font-size: 1.4rem;
+  }
+
+  .heatStats strong {
+    font-size: 1rem;
   }
 
   .profileHero {
