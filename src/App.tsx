@@ -196,22 +196,22 @@ export function App() {
           <span>Active now</span>
         </div>
         <nav className="sideLinks" aria-label="Desktop navigation">
-          <a href="#profile">
+          <button className={activeView === "profile" ? "active" : ""} onClick={() => setActiveView("profile")} type="button">
             <Target size={20} />
             My Profile
-          </a>
-          <a className="active" href="#analytics">
+          </button>
+          <button className={activeView === "analytics" ? "active" : ""} onClick={() => setActiveView("analytics")} type="button">
             <BarChart3 size={20} />
             Analytics
-          </a>
-          <a href="#games">
+          </button>
+          <button className={activeView === "games" ? "active" : ""} onClick={() => setActiveView("games")} type="button">
             <Swords size={20} />
             Games
-          </a>
-          <a href="#settings">
+          </button>
+          <button className={activeView === "settings" ? "active" : ""} onClick={() => setActiveView("settings")} type="button">
             <Gauge size={20} />
             Settings
-          </a>
+          </button>
         </nav>
       </aside>
 
@@ -222,7 +222,7 @@ export function App() {
           </span>
           <strong>MorChess</strong>
         </div>
-        <button type="button" aria-label="Search">
+        <button type="button" aria-label="Search games" onClick={() => setActiveView("games")}>
           <Search size={22} />
         </button>
       </header>
@@ -281,6 +281,8 @@ export function App() {
         </div>
       </section>
 
+      {activeView === "analytics" ? (
+        <>
       <section className="commandGrid">
         <div className="commandDeck">
           <div className="deckHeader">
@@ -359,8 +361,6 @@ export function App() {
         <Metric icon={<Timer size={18} />} label="Best streak" value={`${streakRows.bestWins}W`} detail={`${streakRows.bestLosses}L longest skid`} />
       </section>
 
-      {games.length ? <GameHistory games={recentGames} /> : null}
-
       {games.length ? (
         <section className="dashboardGrid">
           <ChartPanel title="ELO Trend" icon={<BarChart3 size={17} />}>
@@ -377,16 +377,13 @@ export function App() {
 
           <ChartPanel title="Monthly Volume" icon={<CalendarClock size={17} />}>
             <ResponsiveContainer width="100%" height={300}>
-              <ComposedChart data={monthlyRows}>
+              <BarChart data={monthlyRows}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} />
                 <XAxis dataKey="month" minTickGap={24} />
-                <YAxis yAxisId="left" />
-                <YAxis yAxisId="right" orientation="right" />
+                <YAxis />
                 <Tooltip />
-                <Legend />
-                <Bar yAxisId="left" dataKey="games" fill="#81b64c" radius={[4, 4, 0, 0]} />
-                <Line yAxisId="right" dataKey="score" stroke="#e9c349" strokeWidth={2} dot={false} />
-              </ComposedChart>
+                <Bar dataKey="games" fill="#81b64c" radius={[4, 4, 0, 0]} />
+              </BarChart>
             </ResponsiveContainer>
           </ChartPanel>
 
@@ -397,7 +394,6 @@ export function App() {
                 <XAxis dataKey="month" minTickGap={24} />
                 <YAxis />
                 <Tooltip />
-                <Legend />
                 <Bar dataKey="win" stackId="a" fill="#81B64C" />
                 <Bar dataKey="draw" stackId="a" fill="#91908E" />
                 <Bar dataKey="loss" stackId="a" fill="#E64848" />
@@ -429,7 +425,7 @@ export function App() {
               {colorRows.map((row) => (
                 <div className="splitCard" key={row.name}>
                   <span>{row.name}</span>
-                  <strong>{row.score}%</strong>
+                  <strong>{row.share}%</strong>
                   <small>{row.games} games</small>
                 </div>
               ))}
@@ -440,7 +436,7 @@ export function App() {
                 <XAxis dataKey="name" />
                 <YAxis />
                 <Tooltip />
-                <Bar dataKey="winRate" fill="#9fd668" radius={[5, 5, 0, 0]} />
+                <Bar dataKey="share" fill="#9fd668" radius={[5, 5, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </ChartPanel>
@@ -464,24 +460,59 @@ export function App() {
           <p>The app reads Chess.com PGN headers and clock comments, then builds rating, time control, opening, color, opponent, and volume views locally in your browser.</p>
         </section>
       )}
+        </>
+      ) : null}
+
+      {activeView === "games" ? <GameHistory games={[...rangedGames].slice(-80).reverse()} /> : null}
+
+      {activeView === "profile" ? (
+        <ProfilePage
+          allGames={games.length}
+          allTotals={allTotals}
+          summary={summary}
+          timeSheet={timeSheet}
+          totals={totals}
+        />
+      ) : null}
+
+      {activeView === "settings" ? (
+        <SettingsPage
+          endYear={endYear}
+          isLoading={isLoading}
+          onDownload={downloadPgn}
+          onEndYearChange={setEndYear}
+          onImport={importFiles}
+          onLoad={loadFromChessCom}
+          onResetFilters={() => {
+            setRange("all");
+            setTimeSheet(bestDefaultTimeSheet(games));
+            setSelectedYear(availableYears(games)[0] ?? new Date().getUTCFullYear());
+          }}
+          onStartYearChange={setStartYear}
+          onUsernameChange={setUsername}
+          startYear={startYear}
+          username={username}
+          hasGames={Boolean(games.length)}
+        />
+      ) : null}
       </main>
 
       <nav className="mobileBottomNav" aria-label="Mobile navigation">
-        <button className="active" type="button">
+        <button className={activeView === "analytics" ? "active" : ""} onClick={() => setActiveView("analytics")} type="button">
           <BarChart3 size={22} />
           Overview
         </button>
-        <button type="button">
+        <button className={activeView === "games" ? "active" : ""} onClick={() => setActiveView("games")} type="button">
           <Swords size={22} />
           Games
         </button>
-        <button type="button">
+        <button className={activeView === "profile" ? "active" : ""} onClick={() => setActiveView("profile")} type="button">
           <Target size={22} />
-          Openings
+          Profile
         </button>
-        <button type="button">
+        <button className={activeView === "settings" ? "active" : ""} onClick={() => setActiveView("settings")} type="button">
           <Gauge size={22} />
-          Insights
+          Settings
         </button>
       </nav>
     </>
@@ -578,6 +609,123 @@ function GameHistory({ games }: { games: ChessGame[] }) {
           );
         })}
       </div>
+    </section>
+  );
+}
+
+function ProfilePage({
+  allGames,
+  allTotals,
+  summary,
+  timeSheet,
+  totals,
+}: {
+  allGames: number;
+  allTotals: ReturnType<typeof summarize>;
+  summary: ParseSummary | null;
+  timeSheet: TimeSheet;
+  totals: ReturnType<typeof summarize>;
+}) {
+  return (
+    <section className="profileGrid">
+      <article className="profileHero">
+        <div className="avatarMark profileAvatar">
+          <Crown size={34} aria-hidden="true" />
+        </div>
+        <div>
+          <span className="microLabel">My Profile</span>
+          <h2>{summary?.username ?? "Chess.com player"}</h2>
+          <p>{summary ? `${formatDate(summary.firstDate)} to ${formatDate(summary.lastDate)}` : "Pull or import games to build your profile."}</p>
+        </div>
+      </article>
+
+      <Metric icon={<Gauge size={18} />} label={`${timeSheetLabels[timeSheet]} Rating`} value={formatNumber(allTotals.latestElo) ?? "-"} detail="latest rating in selected sheet" />
+      <Metric icon={<Trophy size={18} />} label="Sheet Score" value={`${totals.score}%`} detail={`${totals.games.toLocaleString()} games in current range`} />
+      <Metric icon={<Swords size={18} />} label="Total Imported" value={allGames.toLocaleString()} detail="all games across every sheet" />
+      <Metric icon={<Target size={18} />} label="Peak Rating" value={formatNumber(allTotals.bestElo) ?? "-"} detail={timeSheetLabels[timeSheet]} />
+    </section>
+  );
+}
+
+function SettingsPage({
+  endYear,
+  hasGames,
+  isLoading,
+  onDownload,
+  onEndYearChange,
+  onImport,
+  onLoad,
+  onResetFilters,
+  onStartYearChange,
+  onUsernameChange,
+  startYear,
+  username,
+}: {
+  endYear: string;
+  hasGames: boolean;
+  isLoading: boolean;
+  onDownload: () => void;
+  onEndYearChange: (value: string) => void;
+  onImport: (files: FileList | null) => void;
+  onLoad: () => Promise<void>;
+  onResetFilters: () => void;
+  onStartYearChange: (value: string) => void;
+  onUsernameChange: (value: string) => void;
+  startYear: string;
+  username: string;
+}) {
+  return (
+    <section className="settingsGrid">
+      <form
+        className="fetchPanel settingsPanel"
+        onSubmit={(event) => {
+          event.preventDefault();
+          void onLoad();
+        }}
+      >
+        <div>
+          <span className="microLabel">Settings</span>
+          <h2>Data Source</h2>
+        </div>
+        <label>
+          <span>Chess.com username</span>
+          <div className="inputWrap">
+            <Search size={17} aria-hidden="true" />
+            <input value={username} onChange={(event) => onUsernameChange(event.target.value)} placeholder="hikaru" />
+          </div>
+        </label>
+        <div className="twoInputs">
+          <label>
+            <span>Start year</span>
+            <input value={startYear} onChange={(event) => onStartYearChange(event.target.value)} placeholder="auto" />
+          </label>
+          <label>
+            <span>End year</span>
+            <input value={endYear} onChange={(event) => onEndYearChange(event.target.value)} placeholder="2026" />
+          </label>
+        </div>
+        <button disabled={isLoading} type="submit">
+          {isLoading ? <RefreshCw className="spin" size={18} /> : <GitBranch size={18} />}
+          Pull PGNs
+        </button>
+      </form>
+
+      <article className="importPanel settingsPanel">
+        <span className="microLabel">Manual Import</span>
+        <label className="dropButton">
+          <FileUp size={22} aria-hidden="true" />
+          <span>Import PGN</span>
+          <input accept=".pgn,.txt" type="file" onChange={(event) => onImport(event.target.files)} />
+        </label>
+        <button className="ghostButton" disabled={!hasGames} onClick={onDownload} type="button">
+          <Download size={18} />
+          Export current PGN
+        </button>
+        <button className="ghostButton" disabled={!hasGames} onClick={onResetFilters} type="button">
+          <Gauge size={18} />
+          Reset filters
+        </button>
+      </article>
     </section>
   );
 }

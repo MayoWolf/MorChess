@@ -195,14 +195,18 @@ p {
   gap: 8px;
 }
 
-.sideLinks a {
+.sideLinks button {
   display: flex;
+  width: 100%;
   min-height: 48px;
   align-items: center;
   gap: 14px;
+  border: 0;
   border-radius: 10px;
   color: var(--on-surface-variant);
+  background: transparent;
   padding: 12px 16px;
+  text-align: left;
   text-decoration: none;
   transition:
     color 180ms ease,
@@ -210,12 +214,12 @@ p {
     transform 180ms ease;
 }
 
-.sideLinks a:hover {
+.sideLinks button:hover {
   color: var(--on-surface);
   background: var(--slate-elevated);
 }
 
-.sideLinks a.active {
+.sideLinks button.active {
   color: var(--on-primary-container);
   background: var(--primary-container);
   font-weight: 800;
@@ -1003,6 +1007,61 @@ input:focus {
   line-height: 1.6;
 }
 
+.profileGrid,
+.settingsGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 24px;
+  margin-top: 24px;
+}
+
+.profileHero,
+.settingsPanel {
+  border: 2px solid var(--outline-variant);
+  border-radius: 12px;
+  background: var(--surface-bright);
+  box-shadow: var(--card-shadow);
+}
+
+.profileHero {
+  display: flex;
+  grid-column: 1 / -1;
+  align-items: center;
+  gap: 18px;
+  padding: 24px;
+}
+
+.profileAvatar {
+  width: 76px;
+  height: 76px;
+  margin: 0;
+  flex: 0 0 auto;
+}
+
+.profileHero h2,
+.settingsPanel h2 {
+  margin-top: 6px;
+  color: var(--primary);
+  font-family: "Plus Jakarta Sans", sans-serif;
+  font-size: clamp(1.8rem, 4vw, 3rem);
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+}
+
+.profileHero p {
+  margin-top: 8px;
+  color: var(--on-surface-variant);
+}
+
+.settingsGrid {
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 0.7fr);
+}
+
+.settingsPanel {
+  padding: 18px;
+}
+
 .recharts-cartesian-grid line {
   stroke: var(--slate-elevated);
 }
@@ -1034,11 +1093,13 @@ input:focus {
 @media (max-width: 1180px) {
   .appHeader,
   .commandGrid,
-  .dashboardGrid {
+  .dashboardGrid,
+  .settingsGrid {
     grid-template-columns: 1fr;
   }
 
-  .metricGrid {
+  .metricGrid,
+  .profileGrid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
@@ -1145,8 +1206,14 @@ input:focus {
 
   .twoInputs,
   .metricGrid,
+  .profileGrid,
   .splitGrid {
     grid-template-columns: 1fr;
+  }
+
+  .profileHero {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .gameRow {
